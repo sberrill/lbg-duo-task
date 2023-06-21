@@ -1,53 +1,43 @@
 pipeline {
     agent any
-    
-    environment {
-        DB_PASSWORD = credentials('DB_PASSWORD')
-    }
-    
-    stages {
-        stage('checkout source code') {
-            steps {
-                git url: "https://gitlab.com/qacdevops/chaperootodo_client", branch: "master"
-            }
-        }
+    stages {       
         stage('cleanup') {
             steps {
                 sh '''
-                if docker logs chaperoo-db; then
-                    if docker exec chaperoo-db ls; then
-                        docker stop chaperoo-db
+                if docker logs nginx; then
+                    if docker exec nginx ls; then
+                        docker stop nginx
+                    else
+                        sleep 1
                     fi
-                    docker rm chaperoo-db
+                    docker rm nginx
+                else
+                    sleep 1
                 fi
-                if docker logs chaperoo-service; then
-                    if docker exec chaperoo-service ls; then
-                        docker stop chaperoo-service
+                if docker logs flask-app; then
+                    if docker exec flask-app ls; then
+                        docker stop flask-app
+                else
+                    sleep 1
                     fi
-                    docker rm chaperoo-service
+                    docker rm flask-app
+                 else
+                    sleep 1
                 fi
-                if docker logs chaperoo-client; then
-                    if docker exec chaperoo-client ls; then
-                        docker stop chaperoo-client
-                    fi
-                    docker rm chaperoo-client
-                fi
-                docker rmi chaperoo-client:v1
                 '''
             }
-        }
+        }            
         stage('Build') {
             steps {
-                sh 'docker build -t chaperoo-client:v2 .'
+                sh 'docker build -t duo-task:v1 .'
             }
         }
         stage('run containers') {
             steps {
                 sh '''
-                docker network inspect chaperoo-net && sleep 1 || docker network create chaperoo-net
-                docker run -d -e MYSQL_ROOT_PASSWORD=${DB_PASSWORD} --name chaperoo-db --network chaperoo-net jordangrindrod/chaperoo-db:latest
-                docker run -d -e DB_PASSWORD=${DB_PASSWORD} --name chaperoo-service --network chaperoo-net jordangrindrod/chaperoo-service:latest
-                docker run -d -p 80:80 --network chaperoo-net --name chaperoo-client chaperoo-client:v2
+                docker network inspect duo-net && sleep 1 || docker network create duo-net
+                docker run -d --name flask-app --network duo-net duo-task:v1
+                docker run -d -p 80:80 --network duo-net --mount type=bind,source=$(pwd)/nginx.conf,target=/etc/nginx/nginx/conf --name niginx:alpine
                 '''
             }
         }
